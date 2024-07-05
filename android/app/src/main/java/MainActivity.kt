@@ -31,19 +31,24 @@ private val usbReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (ACTION_USB_PERMISSION == intent.action) {
             synchronized(this) {
-                val _this = context as MainActivity
+                var _this = context as MainActivity;
                 _this.SDR_device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                 if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                    _this.SDR_conn = _this.usbManager!!.openDevice(_this.SDR_device)
-
+                    _this.SDR_conn = _this.usbManager!!.openDevice(_this.SDR_device);
+                    
                     // Save SDR info
-                    _this.SDR_VID = _this.SDR_device!!.vendorId
-                    _this.SDR_PID = _this.SDR_device!!.productId
-                    _this.SDR_FD = _this.SDR_conn!!.fileDescriptor
+                    _this.SDR_VID = _this.SDR_device!!.getVendorId();
+                    _this.SDR_PID = _this.SDR_device!!.getProductId()
+                    _this.SDR_FD = _this.SDR_conn!!.getFileDescriptor();
                 }
-
+                
+                // Whatever the hell this does
+                //context.unregisterReceiver(this);
+                
                 // Hide again the system bars
-                _this.hideSystemBars()
+                _this.hideSystemBars();
+
+                requestNextPermission();
             }
         }
     }
@@ -52,6 +57,8 @@ private val usbReceiver = object : BroadcastReceiver() {
 class MainActivity : NativeActivity() {
     private val TAG : String = "SDR++";
     public var usbManager : UsbManager? = null;
+    private lateinit var devList: MutableList<UsbDevice>
+    private lateinit var permissionIntent: PendingIntent
     public var SDR_device : UsbDevice? = null;
     public var SDR_conn : UsbDeviceConnection? = null;
     public var SDR_VID : Int = -1;
@@ -59,7 +66,7 @@ class MainActivity : NativeActivity() {
     public var SDR_FD : Int = -1;
 
     fun checkAndAsk(permission: String) {
-        if (PermissionChecker.checkSelfPermission(this, permission) != PermissionChecker.PERMISSION_GRANTED) {
+        if (PermissionChecker.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(permission), 1);
         }
     }
@@ -81,25 +88,35 @@ class MainActivity : NativeActivity() {
         // TODO: Have the main code wait until these two permissions are available
 
         // Register events
-        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
+        usbManager = getSystemService(Context.USB_SERVICE) as UsbManager;
         val permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), 0)
         val filter = IntentFilter(ACTION_USB_PERMISSION)
         registerReceiver(usbReceiver, filter)
 
         // Get permission for all USB devices
-        val devList = usbManager!!.deviceList
-        for ((name, dev) in devList) {
-            usbManager!!.requestPermission(dev, permissionIntent)
-        }
+        
+        devList = usbManager.deviceList.values.toMutableList()
+        requestNextPermission()
 
         // Ask for internet permission
-        checkAndAsk(Manifest.permission.INTERNET)
+        checkAndAsk(Manifest.permission.INTERNET);
+
+        super.onCreate(savedInstanceState)
     }
 
     public override fun onResume() {
         // Hide bars again
         hideSystemBars();
         super.onResume();
+    }
+
+    private fun requestNextPermission() {
+        if (devList.isNotEmpty()) {
+            val device = devList[0]
+            usbManager.requestPermission(device, permissionIntent)
+            devList.removeAt(0)
+        }
     }
 
     fun showSoftInput() {
