@@ -27,36 +27,11 @@ import java.io.*;
 
 private const val ACTION_USB_PERMISSION = "org.sdrpp.sdrpp.USB_PERMISSION";
 
-private val usbReceiver = object : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (ACTION_USB_PERMISSION == intent.action) {
-            synchronized(this) {
-                var _this = context as MainActivity;
-                _this.SDR_device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                    _this.SDR_conn = _this.usbManager!!.openDevice(_this.SDR_device);
-                    
-                    // Save SDR info
-                    _this.SDR_VID = _this.SDR_device!!.getVendorId();
-                    _this.SDR_PID = _this.SDR_device!!.getProductId()
-                    _this.SDR_FD = _this.SDR_conn!!.getFileDescriptor();
-                }
-                
-                // Whatever the hell this does
-                //context.unregisterReceiver(this);
-                
-                // Hide again the system bars
-                _this.hideSystemBars();
 
-                requestNextPermission();
-            }
-        }
-    }
-}
 
 class MainActivity : NativeActivity() {
     private val TAG : String = "SDR++";
-    public var usbManager : UsbManager? = null;
+    public lateinit var usbManager : UsbManager;
     private lateinit var devList: MutableList<UsbDevice>
     private lateinit var permissionIntent: PendingIntent
     public var SDR_device : UsbDevice? = null;
@@ -111,7 +86,7 @@ class MainActivity : NativeActivity() {
         super.onResume();
     }
 
-    private fun requestNextPermission() {
+    public fun requestNextPermission() {
         if (devList.isNotEmpty()) {
             val device = devList[0]
             usbManager.requestPermission(device, permissionIntent)
@@ -200,5 +175,31 @@ class MainActivity : NativeActivity() {
         createIfDoesntExist(fdir + "/modules");
 
         return fdir;
+    }
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (ACTION_USB_PERMISSION == intent.action) {
+                synchronized(this) {
+                    var _this = context as MainActivity;
+                    _this.SDR_device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        _this.SDR_conn = _this.usbManager!!.openDevice(_this.SDR_device);
+
+                        // Save SDR info
+                        _this.SDR_VID = _this.SDR_device!!.getVendorId();
+                        _this.SDR_PID = _this.SDR_device!!.getProductId()
+                        _this.SDR_FD = _this.SDR_conn!!.getFileDescriptor();
+                    }
+
+                    // Whatever the hell this does
+                    //context.unregisterReceiver(this);
+
+                    // Hide again the system bars
+                    _this.hideSystemBars();
+
+                    requestNextPermission();
+                }
+            }
+        }
     }
 }
